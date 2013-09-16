@@ -2,158 +2,190 @@
 #include <iostream>
 #include <vector>
 using namespace std;
-#define vvvi vector<vector<vector<int> > >
-#define vvi vector<vector<int> >
-#define vi vector<int> 
+#define vvr vector<vr>
+#define vr vector<row>
 #define UP 0
 #define DOWN 1
 #define LEFT 2
 #define RIGHT 3
-void printVector(vi);
-bool valid(vi* antePreRow, vi* prevRow, vi &nextRow, bool last) {
-	bool ok = true;
-	int lastPos = nextRow.size() -1;
-	bool debug = false;
-	if (prevRow != NULL && antePreRow != NULL) {
-		/*cout << "validating:" << endl;
-		printVector(*prevRow);
-		printVector(nextRow);
-		debug = false;*/
-	}
+//solutions http://oeis.org/A216678
+struct row {
+	bool valid;
+	long ocuppied;
+	long move;
+	long fixed;
+	int size;
+};
+void printVector(row);
+bool checkCover(long* ocuppied, int i) {
+	if (((*ocuppied) >> i )%2 == 1) return false;
+	(*ocuppied) += (1 << i);
+	return true;
+}
+
+bool valid(row* prevRow, row *nextRow, bool isLast, int size, bool debug = false) {
+	//any move for everything
+	long map = 1 << size -1;
+	bool ok = true ;
+	//only one
+
+		long move = nextRow->move;
+		nextRow->ocuppied = 0;
+
 	if (prevRow == NULL) {
 		//first row
-		//corner cases
+		//right corner
+		long firstMove = nextRow->move % 4;
+		ok &= firstMove != UP && firstMove != RIGHT;
 		//left corner
-		ok &= nextRow[0] == 1 && nextRow[1] == 2 || 
-			  nextRow[0] == 3 && nextRow[1] != 2;
-	   	//right corner
-		
-		ok &= nextRow[lastPos] == 1 && nextRow[lastPos-1] == 3 || 
-			  nextRow[lastPos] == 2 && nextRow[lastPos-1] != 3;
+		ok &= ((nextRow->move >> (2*(size-1))) % 2 == 1);
+		long current = move % 4, next = (move >> 2) % 4, last = -1;
+		for (int i = 0; ok && i < size; ++i) {
+			if (debug)	cout << "iteration " << i << endl;
+			//no up
+			ok &= current != UP;
+			//check crossings and fill ocuppieds
+			//No crossing (not left and right on next)
+			if (debug)	cout << ok << endl;
+			ok &= !(current == LEFT && next == RIGHT);
+			if (debug)	cout << ok << endl;
+			if (current==RIGHT) {
+				ok &= (nextRow->ocuppied >> (i-1)) % 2 == 0;
+				nextRow->ocuppied += 1 << (i-1);
+			}
+			if (debug)	cout << ok << endl;
 
-		for (int i = 0; ok && i <= lastPos; ++i) {
-			//No crossing
-			ok &= !(nextRow[i] == 2 && (i != 0 && nextRow[i-1] == 3)) && nextRow[i] != 0;
-			//no 2 on same box
-			ok &= !(nextRow[i] == 3 && (i+2<=lastPos && nextRow[i+2]== 2));
+			if (current==LEFT) {
+				ok &= (nextRow->ocuppied >> (i+1)) % 2 == 0;
+				nextRow->ocuppied += (1 << (i+1));
+			}
+			if (debug)	cout << ok << endl;
+			if (current == DOWN) {
+				ok &= next == RIGHT || last == LEFT;
+			}
+			if (debug)	cout << ok << endl;
+			move = move >> 2;
+			last = current % 4;
+			current = move % 4;
+			next = (move >> 2 )% 4;
 		}
-		
-		
+
+
 		return ok;
 	} else {
+				long pmove = prevRow->move;
+
+		long ocuppied = prevRow->ocuppied;
 		//middle row, compare with previous
 		//sides cases
-		//left side
-		ok &= (nextRow[0] != LEFT);
-	   	//right corner
-		ok &= nextRow[lastPos] != RIGHT; 
+		//right side
+		ok &= (nextRow->move % 4) != RIGHT;
+	   	//left corner
+		ok &= ((nextRow->move >> (2*(size-1))) != LEFT);
+		long current = move % 4, next = (move >> 2) % 4, last = -1,
+			 pcurrent = pmove % 4, pnext = (pmove >> 2 )% 4, plast = -1;
 
-
-	    if (debug && !ok) cout << "stage 1 " << ok;
-
-		for (int i = 0; ok && i <= lastPos; ++i) {
+		for (int i = 0; ok && i < size; ++i) {
 
 			//No crossing
-			ok &= !(nextRow[i] == LEFT && (i != 0 && nextRow[i-1] == RIGHT)) && 
-				  !(last && nextRow[i] == DOWN) &&
-				  !(nextRow[i] == UP && (*prevRow)[i] == DOWN)	 ;
+			ok &= !(current == LEFT && next == RIGHT);
+			ok &= !(current == UP && pcurrent == DOWN) ;
 
-			//no 2 on same box
-			ok &= !(nextRow[i] == RIGHT && (i+2<=lastPos && nextRow[i+2]== LEFT)) ;
-			if (antePreRow != NULL)
-				ok &= !(nextRow[i] == UP && ((*antePreRow)[i]== DOWN));
+			//check coverage
+			if (pcurrent == DOWN)
+				ok &= checkCover(&nextRow->ocuppied, i);
+			if (i != 0 && last == LEFT)
+				ok &= checkCover(&nextRow->ocuppied, i);
+			if (i != size-1 && next == RIGHT)
+				ok &= checkCover(&nextRow->ocuppied, i);
 
-			if (debug && !ok) cout << "stage 2 " << i  << " " << ok << endl;
 
 			//every box has its in && out
 			//prev
-			switch ((*prevRow)[i]) {
+			switch (current) {
 				case UP:
-					ok &= (i != 0 && (*prevRow)[i-1] == RIGHT) ||
-						  (nextRow[i] == UP) || 
-						  (i != lastPos && (*prevRow)[i+1] == LEFT);
+					ok &= (prevRow->ocuppied >> (i)) % 2 == 0 &&
+						   (!isLast || next == RIGHT || last == LEFT)	;
 				break;
 
 				case DOWN:
-					ok &= (i != 0 && (*prevRow)[i-1] == RIGHT) ||
-						  (i != lastPos && (*prevRow)[i+1] == LEFT) ||
-						  (antePreRow != NULL && (*antePreRow)[i] == DOWN);
+					ok &= !isLast && //no es la ultima
+							(prevRow->ocuppied >> (i)) % 2 == 1 && //la de arriba ya fue cubierta
+							((nextRow->ocuppied >> i) % 2 == 1) ; //me cubre alguna
 				break;
-				case LEFT:
-					ok &= (i != lastPos && (*prevRow)[i+1] == LEFT) ||
-						  (antePreRow != NULL && (*antePreRow)[i] == DOWN) ||
-						  (nextRow[i] == UP);
+				case LEFT: //remember check from R to L, L is next
+					ok &= ! (i == size - 1) && //no es el extremo izquierdo
+						(prevRow->ocuppied >> (i)) % 2 == 1;//la de arriba esta cubierta
 				break;
 				case RIGHT:
-					ok &= (i != 0 && (*prevRow)[i-1] == RIGHT) ||
-						  (antePreRow != NULL && (*antePreRow)[i] == DOWN) ||
-						  (nextRow[i] == UP);
+					ok &= (i != 0 )&&
+						(prevRow->ocuppied >> (i)) % 2 == 1 ;
 				break;
 
 			}
-			if (debug && !ok) cout << "stage 3 " << i << " " << ok << endl;
-			/*somebody come here*/
-			if (last) {
-				ok &= (i != 0 && nextRow[i-1] == RIGHT) ||
-						  ((*prevRow)[i] == DOWN) || 
-						  (i != lastPos && nextRow[i+1] == LEFT);
-
+			if (isLast) {
+				ok &= (nextRow->ocuppied >> (i)) % 2 == 1;
 			}
-			if (debug && !ok) cout << "stage 4 " << i << " " << ok << endl;
+			move = move >> 2;
+			pmove = pmove >> 2;
+			last = current % 4;
+			plast = pcurrent % 4;
+			current = move % 4;
+			pcurrent = pmove % 4;
+
+			next = (move >> 2 )% 4;
+			pnext = (pmove >> 2) % 4;
 
 		}
-		
-		
+				prevRow->ocuppied = ocuppied;
+
 		return ok;
 
 	}
 };
-bool inc(vi *vec) {
+bool inc(row *vec) {
 	bool stop = false;
-	for (int i = vec->size()-1; !stop && i >= 0; --i){
-		(*vec)[i]++;
-		if ((*vec)[i] == 4 && i != 0)
-			(*vec)[i] = 0;
-		else 
-			stop = true;
-	}
-	if ((*vec)[0] == 4)
+
+	vec->move++;
+	if (vec->move == 1<<(2*vec->size))
 		return false;
-	else 
-		return true;
+	return true;
 };
-string arrow(int n) {	
+string arrow(int n) {
 	switch (n) {
-		case 0: return "↑"; break;
-		case 1: return "↓"; break;
-		case 2: return "←"; break;
-		case 3: return "→"; break;
+		case UP: return "↑"; break;
+		case DOWN: return "↓"; break;
+		case LEFT: return "←"; break;
+		case RIGHT: return "→"; break;
 		default: return "O"; break;
 	}
 }
-void printVector(vi vector) {
-	for (int i = 0; i < vector.size(); ++i)
-		cout << arrow(vector[i]) << " ";
-	cout << endl;
+void printVector(row vector) {
+	string moves = "";
+	long theMoves = vector.move;
+	cout << vector.move << ":\t";
+	for (int i = 0; i < vector.size; ++i, theMoves = theMoves >> 2) {
+		moves = arrow(theMoves % 4) + moves;
+	}
+	cout << moves << endl;
 }
-void printSolution(vvi vectors) {
-	for (int i = 0; i < vectors.size(); ++i) {
-		printVector(vectors[i]);
+void printSolution(vr rows) {
+	for (int i = 0; i < rows.size(); ++i) {
+		printVector(rows[i]);
 	}
 }
 
 
-vvvi getConfigurations(vvi chain, bool isFirst, bool isLast, int n, int level) {
-	vvvi ret ;
+vvr getConfigurations(vr chain, bool isFirst, bool isLast, int n, int level) {
+	vvr ret ;
 	//cout << "recursing level " << level << endl;
-	vi actual;
-	actual.resize(n,0);
+	row actual;
+	actual.move = -1;
+	actual.size = n;
 	while (inc(&actual)) {
-		
-		vi * previous = chain.size() == 0 ? NULL : &(chain.back());
-		vi * antePre = chain.size() <= 1 ? NULL : &(chain[chain.size()-2]);
-		bool val = valid(antePre,previous, actual,isLast);
-		if (val) {
+		row * previous = chain.size() == 0 ? NULL : &(chain.back());
+		bool ok = valid(previous, &actual,isLast, n);
+		if (ok) {
 			if (level == 0) {
 				cout << "NEW TOP LEVEL VECTOR: ";
 				printVector(actual);
@@ -162,8 +194,7 @@ vvvi getConfigurations(vvi chain, bool isFirst, bool isLast, int n, int level) {
 			/*for (int i = 0; i < chain.size(); ++i)
 				printVector(chain[i]);*/
 			if (!isLast) {
-
-				vvvi rret = getConfigurations(chain,false,n == level+2, n, level +1 );
+				vvr rret = getConfigurations(chain,false,n == level+2, n, level +1 );
 				for (int i = 0; i < rret.size(); ++i)
 					ret.push_back(rret[i]);
 			}
@@ -176,6 +207,36 @@ vvvi getConfigurations(vvi chain, bool isFirst, bool isLast, int n, int level) {
 
 	return ret;
 }
+void getCountConfigurations(vr chain, bool isFirst, bool isLast, int n, int level, long &sols) {
+	//cout << "recursing level " << level << endl;
+	row actual;
+	actual.move = -1;
+	actual.size = n;
+	while (inc(&actual)) {
+		row * previous = chain.size() == 0 ? NULL : &(chain.back());
+		bool ok = valid(previous, &actual,isLast, n);
+		if (ok) {
+			if (level == 0) {
+				cout << "NEW TOP LEVEL VECTOR: ";
+				printVector(actual);
+			}
+			chain.push_back(actual);
+			/*for (int i = 0; i < chain.size(); ++i)
+				printVector(chain[i]);*/
+			if (!isLast) {
+				getCountConfigurations(chain,false,n == level+2, n, level +1 , sols);
+			}
+			else {
+				printSolution(chain);//ret.push_back(chain);
+				sols++;
+				cout << sols << endl;
+			}
+
+			chain.pop_back();
+		}
+	}
+
+}
 int main (int argc, char *argv[]) {
 	if (argc != 2) {
 		cout << "missing size";
@@ -184,21 +245,24 @@ int main (int argc, char *argv[]) {
 
 	int n = atoi(argv[1]);
 	cout << "solving euler 393 for " << n << endl;
-	if (n%2==1 || n < 2) 
+	if (n%2==1 || n < 2)
 		cout << "Solution: 0\n";
 	else {
-		/*
-		0: up
-		1: down
-		2: left
-		3: right
-		*/
-		vvvi sol =  getConfigurations(vvi(), true,false,n,0);
-		cout << endl << endl << "Solutions (" << sol.size() << "):" << endl;
-		for (int i = 0; i < sol.size(); ++i) {
+		row r;
+		r.move = -1;
+		r.ocuppied = 0;
+		r.size = n;
+		//vvr sol =  getConfigurations(vr(), true,false,n,0);
+		long s = 0;
+		getCountConfigurations(vr(), true,false,n,0,s);
+		//cout << endl << endl << "Solutions (" << sol.size() << "):" << endl;
+		cout << endl << endl << "Solutions (" << s << "):" << endl;
+		/*for (int i = 0; i < sol.size(); ++i) {
 			printSolution(sol[i]);
 			cout << "--------------"<< endl;
 		}
+		r.move=13;
+		cout << valid(NULL, &r, false, n, true);*/
 	}
 
 
